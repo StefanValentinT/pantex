@@ -1,0 +1,1 @@
+Some text *this should be bold* even more text.
