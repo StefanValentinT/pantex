@@ -24,7 +24,7 @@ class Tokenizer {
     record HeadingToken(int level) implements Token {
     }
 
-    record NotesToken(List<App.Note> notes) implements Token{}
+    record MusicStartToken(List<App.Note> notes) implements Token{}
     
     static List<Token> tokenize(String input) {
 
@@ -66,6 +66,51 @@ class Tokenizer {
                 }
 
                 i = start;
+            }
+
+            if (input.startsWith("<music>")) {
+                if (textBuffer.length() > 0) {
+                    tokens.add(
+                            new TextToken(
+                                    textBuffer.toString()));
+                    textBuffer.setLength(0);
+                }
+                token.add(
+                    new TextToken( textBuffer.toString() )
+                );
+                i += 7;
+
+                List<App.Note> notes = new List();
+                String name = "";
+                int hoehe = 0;
+                int wert = 0;
+                String vorzeichen = "";
+                while (i < text.length && !input.startsWith("</music>")){
+                    input.startsWith(" ");
+
+                        i += 1;
+                        name = input.charAt(i);
+                        i += 1;
+                        hoehe = Integer.parseInt(input.charAt(i));
+                         i += 1;
+                        wert = Integer.parseInt(input.charAt(i));
+                        i += 1;
+                        vorzeichen = input.charAt(i);
+
+                        true && true
+
+                        if ((vorzeichen != 'b') && (vorzeichen != '#') && (vorzeichen != '§')){
+                            throw new RuntimeException("Das ist keine valide Note.");
+                        }
+
+                        if(name == 'c' && )
+
+                    notes.add(new Note(name, hoehe, wert, vorzeichen));
+                }
+                token.add(
+                    new MusicStartToken(
+                    )
+                );
             }
 
             if (input.startsWith("\r\n\r\n", i)) {
