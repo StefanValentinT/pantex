@@ -9,7 +9,7 @@ class Tokenizer {
                     StarToken,
                     ParagraphBreakToken,
                     HeadingToken,
-                    NotesToken {
+                    MusicStartToken {
     }
 
     record TextToken(String text) implements Token {
@@ -68,51 +68,59 @@ class Tokenizer {
                 i = start;
             }
 
-            if (input.startsWith("<music>")) {
+            if (input.startsWith("<music>", i)) {
                 if (textBuffer.length() > 0) {
-                    tokens.add(
-                            new TextToken(
-                                    textBuffer.toString()));
+                    tokens.add(new TextToken(textBuffer.toString()));
                     textBuffer.setLength(0);
                 }
-                token.add(
-                    new TextToken( textBuffer.toString() )
-                );
+
                 i += 7;
 
-                List<App.Note> notes = new List();
-                String name = "";
-                int hoehe = 0;
-                int wert = 0;
-                String vorzeichen = "";
-                while (i < text.length && !input.startsWith("</music>")){
-                    input.startsWith(" ");
+                List<App.Note> notes = new ArrayList<>();
 
-                        i += 1;
-                        name = input.charAt(i);
-                        i += 1;
-                        hoehe = Integer.parseInt(input.charAt(i));
-                         i += 1;
-                        wert = Integer.parseInt(input.charAt(i));
-                        i += 1;
-                        vorzeichen = input.charAt(i);
+                while (i < input.length() && !input.startsWith("</music>", i)) {
+                    if (input.charAt(i) == ' ' || input.charAt(i) == '\n' || input.charAt(i) == '\r') {
+                        i++;
+                        continue;
+                    }
 
-                        true && true
+                    
+                    if (i + 3 >= input.length()) {
+                        throw new RuntimeException("Incomplete note definition near end of music block.");
+                    }
 
-                        if ((vorzeichen != 'b') && (vorzeichen != '#') && (vorzeichen != '§')){
-                            throw new RuntimeException("Das ist keine valide Note.");
-                        }
+                    char name = input.charAt(i);
+                    i++;
 
-                        if(name == 'c' && )
+                    int hoehe = Character.getNumericValue(input.charAt(i));
+                    i++;
 
-                    notes.add(new Note(name, hoehe, wert, vorzeichen));
+                    int wert = Character.getNumericValue(input.charAt(i));
+                    i++;
+
+                    char vorzeichen = input.charAt(i);
+                    i++;
+
+                    if (vorzeichen != 'b' && vorzeichen != '#' && vorzeichen != '§') {
+                        throw new RuntimeException("Das ist keine valide Note. Ungültiges Vorzeichen: " + vorzeichen);
+                    }
+                    
+                    if (name < 'a' || name > 'g') {
+                        throw new RuntimeException("Ungültiger Notenname: " + name);
+                    }
+
+                    notes.add(new App.Note(String.valueOf(name), hoehe, wert, String.valueOf(vorzeichen)));
                 }
-                token.add(
-                    new MusicStartToken(
-                    )
-                );
-            }
 
+                if (input.startsWith("</music>", i)) {
+                    i += 8;
+                } else {
+                    throw new RuntimeException("Missing closing </music> tag.");
+                }
+
+                tokens.add(new MusicStartToken(notes));
+                continue; 
+            }
             if (input.startsWith("\r\n\r\n", i)) {
 
                 if (textBuffer.length() > 0) {
