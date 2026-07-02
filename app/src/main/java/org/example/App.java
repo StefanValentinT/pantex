@@ -16,6 +16,15 @@ import java.util.List;
 
 public class App {
 
+    private static final Font normalFont = new Font(Font.TIMES_ROMAN, 12, Font.NORMAL);
+    private static final Font boldFont = new Font(Font.TIMES_ROMAN, 12, Font.BOLD);
+    private static final Font h1 = new Font(Font.TIMES_ROMAN, 24, Font.BOLD);
+    private static final Font h2 = new Font(Font.TIMES_ROMAN, 20, Font.BOLD);
+    private static final Font h3 = new Font(Font.TIMES_ROMAN, 18, Font.BOLD);
+    private static final Font h4 = new Font(Font.TIMES_ROMAN, 16, Font.BOLD);
+    private static final Font h5 = new Font(Font.TIMES_ROMAN, 14, Font.BOLD);
+    private static final Font h6 = new Font(Font.TIMES_ROMAN, 13, Font.BOLD);
+
     sealed interface ASTNode {
     }
 
@@ -92,6 +101,15 @@ public class App {
                     }
 
                     bold = !bold;
+                }
+
+                case Tokenizer.MusicStartToken m -> {
+                        if (text.length() > 0) {
+                        String value = text.toString();
+                        currentInlines.add(bold ? new BoldTextNode(value) : new NormalTextNode(value));
+                        text.setLength(0);
+                        }
+                        currentInlines.add(new NotesNode(m.notes()));
                 }
 
                 case Tokenizer.TextToken t ->
@@ -188,25 +206,6 @@ public class App {
         return new DocNode(blocks);
     }
 
-    private static Font headingFont(
-            int level,
-            Font h1,
-            Font h2,
-            Font h3,
-            Font h4,
-            Font h5,
-            Font h6) {
-
-        return switch (level) {
-            case 1 -> h1;
-            case 2 -> h2;
-            case 3 -> h3;
-            case 4 -> h4;
-            case 5 -> h5;
-            default -> h6;
-        };
-    }
-
     public static void main(String[] args) {
 
         String inputFilePath =
@@ -230,147 +229,134 @@ public class App {
             DocNode ast =
                     parse(tokens);
 
-            PdfWriter.getInstance(
-                    document,
-                    new FileOutputStream(outputPdfPath));
-
+            PdfWriter.getInstance(document, new FileOutputStream(outputPdfPath));
             document.open();
 
-            Font normalFont =
-                    new Font(
-                            Font.TIMES_ROMAN,
-                            12,
-                            Font.NORMAL);
-
-            Font boldFont =
-                    new Font(
-                            Font.TIMES_ROMAN,
-                            12,
-                            Font.BOLD);
-
-            Font h1 =
-                    new Font(
-                            Font.TIMES_ROMAN,
-                            24,
-                            Font.BOLD);
-
-            Font h2 =
-                    new Font(
-                            Font.TIMES_ROMAN,
-                            20,
-                            Font.BOLD);
-
-            Font h3 =
-                    new Font(
-                            Font.TIMES_ROMAN,
-                            18,
-                            Font.BOLD);
-
-            Font h4 =
-                    new Font(
-                            Font.TIMES_ROMAN,
-                            16,
-                            Font.BOLD);
-
-            Font h5 =
-                    new Font(
-                            Font.TIMES_ROMAN,
-                            14,
-                            Font.BOLD);
-
-            Font h6 =
-                    new Font(
-                            Font.TIMES_ROMAN,
-                            13,
-                            Font.BOLD);
-
             for (BlockNode block : ast.blocks()) {
-
-                switch (block) {
-
-                    case ParagraphNode p -> {
-
-                        Paragraph paragraph =
-                                new Paragraph();
-
-                        paragraph.setSpacingAfter(12f);
-
-                        for (InlineNode inline : p.children()) {
-
-                            switch (inline) {
-
-                                case NormalTextNode(String text) ->
-                                        paragraph.add(
-                                                new Chunk(
-                                                        text,
-                                                        normalFont));
-
-                                case BoldTextNode(String text) ->
-                                        paragraph.add(
-                                                new Chunk(
-                                                        text,
-                                                        boldFont));
-                            }
-                        }
-
-                        document.add(paragraph);
-                    }
-
-                    case HeadingNode h -> {
-
-                        Paragraph heading =
-                                new Paragraph();
-
-                        heading.setSpacingBefore(10f);
-                        heading.setSpacingAfter(8f);
-
-                        Font headingFont =
-                                headingFont(
-                                        h.level(),
-                                        h1,
-                                        h2,
-                                        h3,
-                                        h4,
-                                        h5,
-                                        h6);
-
-                        for (InlineNode inline : h.children()) {
-
-                            String text =
-                                    switch (inline) {
-                                        case NormalTextNode(String t) -> t;
-                                        case BoldTextNode(String t) -> t;
-                                    };
-
-                            heading.add(
-                                    new Chunk(
-                                            text,
-                                            headingFont));
-                        }
-
-                        document.add(heading);
-                    }
-                }
+                emitBlock(block, document);
             }
 
-            System.out.println(
-                    "PDF created successfully at: "
-                            + outputPdfPath);
+            System.out.println("PDF created successfully at: " + outputPdfPath);
 
-        }
-        catch (DocumentException | IOException e) {
-
-            System.err.println(
-                    "An error occurred: "
-                            + e.getMessage());
-
+        } catch (DocumentException | IOException e) {
+            System.err.println("An error occurred: " + e.getMessage());
             e.printStackTrace();
-        }
-        finally {
-
+        } finally {
             if (document.isOpen()) {
                 document.close();
             }
         }
+    }
+
+    private static void emitBlock(BlockNode block, Document document) throws DocumentException {
+        switch (block) {
+            case ParagraphNode p -> {
+                Paragraph paragraph = new Paragraph();
+                paragraph.setSpacingAfter(12f);
+
+                for (InlineNode inline : p.children()) {
+                    if (inline instanceof NotesNode notesNode) {
+                        if (!paragraph.isEmpty()) {
+                            document.add(paragraph);
+                            paragraph = new Paragraph();
+                            paragraph.setSpacingAfter(12f);
+                        }
+                        renderMusicStaff(notesNode.notes(), document);
+                    } else {
+                        emitInline(inline, paragraph, normalFont);
+                    }
+                }
+                if (!paragraph.isEmpty()) {
+                    document.add(paragraph);
+                }
+            }
+   
+            case HeadingNode h -> {
+                Paragraph heading = new Paragraph();
+                heading.setSpacingBefore(10f);
+                heading.setSpacingAfter(8f);
+
+                Font headingFont = headingFont(h.level(), h1, h2, h3, h4, h5, h6);
+
+                for (InlineNode inline : h.children()) {
+                    emitInline(inline, heading, headingFont);
+                }
+                document.add(heading);
+            }
+        }
+    }
+
+    private static void emitInline(InlineNode inline, Paragraph container, Font currentFont) {
+        switch (inline) {
+            case NormalTextNode(String text) -> 
+                container.add(new Chunk(text, currentFont));
+
+            case BoldTextNode(String text) -> {
+                Font appliedBold = (currentFont == normalFont) ? boldFont : currentFont;
+                container.add(new Chunk(text, appliedBold));
+            }
+
+            case NotesNode(List<Note> notes) -> {
+                for (Note note : notes) {
+                    container.add(new Chunk(note.name() + note.hoehe() + " ", currentFont));
+                }
+            }
+
+        }
+    }
+
+    private static void renderMusicStaff(List<Note> notes, Document document) throws DocumentException {
+        if (notes == null || notes.isEmpty()) return;
+
+        int staffRows = 5; 
+        int totalColumns = notes.size() + 1;
+
+        PdfPTable staffTable = new PdfPTable(totalColumns);
+        staffTable.setWidthPercentage(100);
+        staffTable.setSpacingBefore(8f);
+        staffTable.setSpacingAfter(8f);
+
+        for (int row = 0; row < staffRows; row++) {
+            PdfPCell clefCell = new PdfPCell(new Phrase(row == 2 ? "𝄞" : "", musicFont));
+            styleStaffCell(clefCell, row, staffRows);
+            staffTable.addCell(clefCell);
+
+            for (Note note : notes) {
+                boolean isNoteInRow = (staffRows - 1 - (note.hoehe() % staffRows)) == row;
+                
+                String noteSymbol = "";
+                if (isNoteInRow) {
+                    String accidental = (note.vorzeichen() != null && !note.vorzeichen().isBlank()) ? note.vorzeichen() : "";
+                    noteSymbol = accidental + "● (" + note.name() + ")";
+                }
+
+                PdfPCell noteCell = new PdfPCell(new Phrase(noteSymbol, musicFont));
+                styleStaffCell(noteCell, row, staffRows);
+                staffTable.addCell(noteCell);
+            }
+        }
+        document.add(staffTable);
+    }
+
+    private static void styleStaffCell(PdfPCell cell, int currentRow, int totalRows) {
+        cell.setBorder(Rectangle.NO_BORDER);
+        cell.setPaddingTop(4f);
+        cell.setPaddingBottom(4f);
+        cell.setHorizontalAlignment(PdfPCell.ALIGN_CENTER);
+
+        cell.setBorderWidthTop(0.5f);
+        cell.setBorderColorTop(org.openpdf.text.Color.BLACK);
+        
+        if (currentRow == totalRows - 1) {
+            cell.setBorderWidthBottom(0.5f);
+            cell.setBorderColorBottom(org.openpdf.text.Color.BLACK);
+        }
+    }
+
+    private static Font headingFont(int level, Font... fonts) {
+        if (level >= 1 && level <= fonts.length) {
+            return fonts[level - 1];
+        }
+        return fonts[fonts.length - 1];
     }
 }
