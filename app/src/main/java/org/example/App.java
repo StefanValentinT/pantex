@@ -6,6 +6,10 @@ import org.openpdf.text.DocumentException;
 import org.openpdf.text.Font;
 import org.openpdf.text.Paragraph;
 import org.openpdf.text.pdf.PdfWriter;
+import org.openpdf.text.Phrase;
+import org.openpdf.text.Rectangle;
+import org.openpdf.text.pdf.PdfPCell;
+import org.openpdf.text.pdf.PdfPTable;
 
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -18,6 +22,8 @@ public class App {
 
     private static final Font normalFont = new Font(Font.TIMES_ROMAN, 12, Font.NORMAL);
     private static final Font boldFont = new Font(Font.TIMES_ROMAN, 12, Font.BOLD);
+    private static final Font musicFont =
+        new Font(Font.TIMES_ROMAN, 12, Font.NORMAL);
     private static final Font h1 = new Font(Font.TIMES_ROMAN, 24, Font.BOLD);
     private static final Font h2 = new Font(Font.TIMES_ROMAN, 20, Font.BOLD);
     private static final Font h3 = new Font(Font.TIMES_ROMAN, 18, Font.BOLD);
@@ -327,7 +333,7 @@ public class App {
                 String noteSymbol = "";
                 if (isNoteInRow) {
                     String accidental = (note.vorzeichen() != null && !note.vorzeichen().isBlank()) ? note.vorzeichen() : "";
-                    noteSymbol = accidental + "● (" + note.name() + ")";
+                    noteSymbol = accidental + "𝅝 (" + note.name() + ")";
                 }
 
                 PdfPCell noteCell = new PdfPCell(new Phrase(noteSymbol, musicFont));
@@ -345,11 +351,9 @@ public class App {
         cell.setHorizontalAlignment(PdfPCell.ALIGN_CENTER);
 
         cell.setBorderWidthTop(0.5f);
-        cell.setBorderColorTop(org.openpdf.text.Color.BLACK);
         
         if (currentRow == totalRows - 1) {
             cell.setBorderWidthBottom(0.5f);
-            cell.setBorderColorBottom(org.openpdf.text.Color.BLACK);
         }
     }
 
