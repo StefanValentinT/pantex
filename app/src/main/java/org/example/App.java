@@ -452,6 +452,8 @@ public class App {
 
 			if (filled) {
 				cb.fill();
+			} else {
+				cb.stroke();
 			}
 			cb.restoreState();
 		}
