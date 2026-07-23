@@ -1,1 +1,6 @@
-Some text *this should be bold* even more text.
+# Test
+
+<music>
+& 4/4 #c4:1 c4:2 #d4:4 e4:8 f4:16 | g4:4 #a4:4 bh4:4 #c5:4 ||
+</music>
+

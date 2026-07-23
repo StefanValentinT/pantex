@@ -2,193 +2,165 @@ package org.example;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 class Tokenizer {
-    sealed interface Token
-            permits TextToken,
-                    StarToken,
-                    ParagraphBreakToken,
-                    HeadingToken,
-                    MusicStartToken {
-    }
+	sealed interface Token
+			permits TextToken,
+					StarToken,
+					ParagraphBreakToken,
+					HeadingToken,
+					MusicStartToken {
+	}
 
-    record TextToken(String text) implements Token {
-    }
+	record TextToken(String text) implements Token {}
+	record StarToken() implements Token {}
+	record ParagraphBreakToken() implements Token {}
+	record HeadingToken(int level) implements Token {}
+	record MusicStartToken(List<App.MusicElement> elements) implements Token {}
 
-    record StarToken() implements Token {
-    }
+	static List<Token> tokenize(String input) {
 
-    record ParagraphBreakToken() implements Token {
-    }
+		List<Token> tokens = new ArrayList<>();
+		StringBuilder textBuffer = new StringBuilder();
 
-    record HeadingToken(int level) implements Token {
-    }
+		int i = 0;
 
-    record MusicStartToken(List<App.Note> notes) implements Token{}
-    
-    static List<Token> tokenize(String input) {
+		while (i < input.length()) {
 
-        List<Token> tokens = new ArrayList<>();
-        StringBuilder textBuffer = new StringBuilder();
+			if (i == 0 || input.charAt(i - 1) == '\n') {
+				int start = i;
+				int level = 0;
 
-        int i = 0;
+				while (i < input.length()
+						&& input.charAt(i) == '#'
+						&& level < 6) {
+					level++;
+					i++;
+				}
 
-        while (i < input.length()) {
+				if (level > 0
+						&& i < input.length()
+						&& input.charAt(i) == ' ') {
 
-            if (i == 0 || input.charAt(i - 1) == '\n') {
+					if (textBuffer.length() > 0) {
+						tokens.add(new TextToken(textBuffer.toString()));
+						textBuffer.setLength(0);
+					}
 
-                int start = i;
-                int level = 0;
+					tokens.add(new HeadingToken(level));
+					i++;
+					continue;
+				}
 
-                while (i < input.length()
-                        && input.charAt(i) == '#'
-                        && level < 6) {
-                    level++;
-                    i++;
-                }
+				i = start;
+			}
 
-                if (level > 0
-                        && i < input.length()
-                        && input.charAt(i) == ' ') {
+			if (input.startsWith("<music>", i)) {
+				if (textBuffer.length() > 0) {
+					tokens.add(new TextToken(textBuffer.toString()));
+					textBuffer.setLength(0);
+				}
 
-                    if (textBuffer.length() > 0) {
-                        tokens.add(
-                                new TextToken(
-                                        textBuffer.toString()));
-                        textBuffer.setLength(0);
-                    }
+				int musicEnd = input.indexOf("</music>", i);
+				if (musicEnd == -1) {
+					throw new RuntimeException("Missing closing </music> tag.");
+				}
 
-                    tokens.add(
-                            new HeadingToken(level));
+				String musicContent = input.substring(i + 7, musicEnd);
+				i = musicEnd + 8;
 
-                    i++;
-                    continue;
-                }
+				List<App.MusicElement> elements = parseMusicContent(musicContent);
+				tokens.add(new MusicStartToken(elements));
+				continue;
+			}
 
-                i = start;
-            }
+			if (input.startsWith("\r\n\r\n", i)) {
+				if (textBuffer.length() > 0) {
+					tokens.add(new TextToken(textBuffer.toString()));
+					textBuffer.setLength(0);
+				}
+				tokens.add(new ParagraphBreakToken());
+				i += 4;
+			}
+			else if (input.startsWith("\n\n", i)) {
+				if (textBuffer.length() > 0) {
+					tokens.add(new TextToken(textBuffer.toString()));
+					textBuffer.setLength(0);
+				}
+				tokens.add(new ParagraphBreakToken());
+				i += 2;
+			}
+			else if (input.charAt(i) == '*') {
+				if (textBuffer.length() > 0) {
+					tokens.add(new TextToken(textBuffer.toString()));
+					textBuffer.setLength(0);
+				}
+				tokens.add(new StarToken());
+				i++;
+			}
+			else {
+				char c = input.charAt(i);
+				if (c == '\r') {
+					i++;
+					continue;
+				}
+				if (c == '\n') {
+					textBuffer.append(' ');
+				} else {
+					textBuffer.append(c);
+				}
+				i++;
+			}
+		}
 
-            if (input.startsWith("<music>", i)) {
-                if (textBuffer.length() > 0) {
-                    tokens.add(new TextToken(textBuffer.toString()));
-                    textBuffer.setLength(0);
-                }
+		if (textBuffer.length() > 0) {
+			tokens.add(new TextToken(textBuffer.toString()));
+		}
 
-                i += 7;
+		return tokens;
+	}
 
-                List<App.Note> notes = new ArrayList<>();
+	private static List<App.MusicElement> parseMusicContent(String content) {
+		List<App.MusicElement> elements = new ArrayList<>();
+		
+		String normalized = content.replace("||", " DOUBLEBAR ").replace("|", " SINGLEBAR ");
+		
+		String[] parts = normalized.trim().split("\\s+");
 
-                while (i < input.length() && !input.startsWith("</music>", i)) {
-                    if (input.charAt(i) == ' ' || input.charAt(i) == '\n' || input.charAt(i) == '\r') {
-                        i++;
-                        continue;
-                    }
+		Pattern notePattern = Pattern.compile("^([#b§])?([a-gA-GhH])([0-9]):([1-9][0-9]*)$");
+		Pattern timeSigPattern = Pattern.compile("^(\\d+)/(\\d+)$");
 
-                    
-                    if (i + 3 >= input.length()) {
-                        throw new RuntimeException("Incomplete note definition near end of music block.");
-                    }
+		for (String part : parts) {
+			if (part.isEmpty()) continue;
 
-                    char name = input.charAt(i);
-                    i++;
+			if (part.equals("&")) {
+				elements.add(new App.ClefElement("&"));
+			} else if (part.equals("DOUBLEBAR")) {
+				elements.add(new App.BarLineElement("||"));
+			} else if (part.equals("SINGLEBAR")) {
+				elements.add(new App.BarLineElement("|"));
+			} else {
+				Matcher timeSigMatcher = timeSigPattern.matcher(part);
+				Matcher noteMatcher = notePattern.matcher(part);
 
-                    int hoehe = Character.getNumericValue(input.charAt(i));
-                    i++;
-
-                    int wert = Character.getNumericValue(input.charAt(i));
-                    i++;
-
-                    char vorzeichen = input.charAt(i);
-                    i++;
-
-                    if (vorzeichen != 'b' && vorzeichen != '#' && vorzeichen != '§') {
-                        throw new RuntimeException("Das ist keine valide Note. Ungültiges Vorzeichen: " + vorzeichen);
-                    }
-                    
-                    if (name < 'a' || name > 'g') {
-                        throw new RuntimeException("Ungültiger Notenname: " + name);
-                    }
-
-                    notes.add(new App.Note(String.valueOf(name), hoehe, wert, String.valueOf(vorzeichen)));
-                }
-
-                if (input.startsWith("</music>", i)) {
-                    i += 8;
-                } else {
-                    throw new RuntimeException("Missing closing </music> tag.");
-                }
-
-                tokens.add(new MusicStartToken(notes));
-                continue; 
-            }
-            if (input.startsWith("\r\n\r\n", i)) {
-
-                if (textBuffer.length() > 0) {
-                    tokens.add(
-                            new TextToken(
-                                    textBuffer.toString()));
-                    textBuffer.setLength(0);
-                }
-
-                tokens.add(
-                        new ParagraphBreakToken());
-
-                i += 4;
-            }
-            else if (input.startsWith("\n\n", i)) {
-
-                if (textBuffer.length() > 0) {
-                    tokens.add(
-                            new TextToken(
-                                    textBuffer.toString()));
-                    textBuffer.setLength(0);
-                }
-
-                tokens.add(
-                        new ParagraphBreakToken());
-
-                i += 2;
-            }
-            else if (input.charAt(i) == '*') {
-
-                if (textBuffer.length() > 0) {
-                    tokens.add(
-                            new TextToken(
-                                    textBuffer.toString()));
-                    textBuffer.setLength(0);
-                }
-
-                tokens.add(
-                        new StarToken());
-
-                i++;
-            }
-            else {
-
-                char c = input.charAt(i);
-
-                if (c == '\r') {
-                    i++;
-                    continue;
-                }
-
-                if (c == '\n') {
-                    textBuffer.append(' ');
-                }
-                else {
-                    textBuffer.append(c);
-                }
-
-                i++;
-            }
-        }
-
-        if (textBuffer.length() > 0) {
-            tokens.add(
-                    new TextToken(
-                            textBuffer.toString()));
-        }
-
-        return tokens;
-    }
+				if (timeSigMatcher.matches()) {
+					int beats = Integer.parseInt(timeSigMatcher.group(1));
+					int beatType = Integer.parseInt(timeSigMatcher.group(2));
+					elements.add(new App.TimeSignatureElement(beats, beatType));
+				} else if (noteMatcher.matches()) {
+					String vorzeichen = noteMatcher.group(1) != null ? noteMatcher.group(1) : "";
+					String name = noteMatcher.group(2);
+					int hoehe = Integer.parseInt(noteMatcher.group(3));
+					int wert = Integer.parseInt(noteMatcher.group(4));
+					
+					elements.add(new App.Note(name, hoehe, wert, vorzeichen));
+				} else {
+					throw new RuntimeException("Unbekanntes Musik-Element: " + part);
+				}
+			}
+		}
+		return elements;
+	}
 }
